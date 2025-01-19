@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat List</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <h1>WhatsApp Clone</h1>
+    </header>
+    <main id="chat-list">
+        <!-- Chats will be dynamically loaded here -->
+    </main>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Load chat list
+        fetch('/api/messages')
+            .then((res) => res.json())
+            .then((chats) => {
+                const chatList = document.getElementById('chat-list');
+                chats.forEach((chat) => {
+                    const chatDiv = document.createElement('div');
+                    chatDiv.className = 'chat';
+                    chatDiv.innerHTML = `
+                        <a href="/chat/${chat.jid}">
+                            <div class="chat-info">
+                                <h2>${chat.sender}</h2>
+                                <p>${chat.lastMessage}</p>
+                            </div>
+                        </a>
+                    `;
+                    chatList.appendChild(chatDiv);
+                });
+            });
+    </script>
+</body>
+</html>

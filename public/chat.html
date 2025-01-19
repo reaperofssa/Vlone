@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <a href="/">Back</a>
+        <h1>Chat</h1>
+    </header>
+    <main id="chat-box">
+        <!-- Messages will be dynamically loaded here -->
+    </main>
+    <footer>
+        <input type="text" id="message-input" placeholder="Type a message">
+        <button id="send-message">Send</button>
+    </footer>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js"></script>
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-message');
+        const jid = window.location.pathname.split('/chat/')[1];
+
+        // Load messages for this chat
+        fetch(`/api/messages/${jid}`)
+            .then((res) => res.json())
+            .then((messages) => {
+                messages.forEach((msg) => {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = msg.sender === 'user' ? 'message user' : 'message';
+                    messageDiv.innerHTML = `<p>${msg.content}</p>`;
+                    chatBox.appendChild(messageDiv);
+                });
+            });
+
+        // Send a message
+        sendButton.addEventListener('click', () => {
+            const message = messageInput.value;
+            if (!message) return;
+
+            fetch('/send-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jid, message }),
+            }).then(() => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message user';
+                messageDiv.innerHTML = `<p>${message}</p>`;
+                chatBox.appendChild(messageDiv);
+                messageInput.value = '';
+            });
+        });
+    </script>
+</body>
+</html>
