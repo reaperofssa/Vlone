@@ -8,53 +8,101 @@
 </head>
 <body>
     <header>
-        <a href="/">Back</a>
+        <a href="/">⬅ Back</a>
         <h1>Chat</h1>
     </header>
-    <main id="chat-box">
-        <!-- Messages will be dynamically loaded here -->
-    </main>
+    <main id="chat-box"></main>
     <footer>
         <input type="text" id="message-input" placeholder="Type a message">
+        <input type="file" id="image-input" style="display: none;">
+        <button id="send-image">📷</button>
         <button id="send-message">Send</button>
     </footer>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="app.js"></script>
     <script>
         const chatBox = document.getElementById('chat-box');
         const messageInput = document.getElementById('message-input');
-        const sendButton = document.getElementById('send-message');
+        const sendMessageButton = document.getElementById('send-message');
+        const sendImageButton = document.getElementById('send-image');
+        const imageInput = document.getElementById('image-input');
         const jid = window.location.pathname.split('/chat/')[1];
+        let replyTo = null;
 
-        // Load messages for this chat
-        fetch(`/api/messages/${jid}`)
-            .then((res) => res.json())
-            .then((messages) => {
-                messages.forEach((msg) => {
-                    const messageDiv = document.createElement('div');
-                    messageDiv.className = msg.sender === 'user' ? 'message user' : 'message';
-                    messageDiv.innerHTML = `<p>${msg.content}</p>`;
-                    chatBox.appendChild(messageDiv);
+        // Load initial messages
+        function loadMessages() {
+            fetch(`/api/messages/${jid}`)
+                .then(res => res.json())
+                .then(messages => {
+                    chatBox.innerHTML = '';
+                    messages.forEach(addMessageToChat);
                 });
-            });
+        }
+
+        function addMessageToChat(msg) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = msg.sender === 'You' ? 'message user' : 'message';
+            messageDiv.innerHTML = `
+                <p>${msg.content}</p>
+                ${msg.sender !== 'You' ? `<button class="reply-btn" data-id="${msg.timestamp}">↩</button>` : ''}
+            `;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Handle real-time updates
+        const socket = io();
+        socket.on('new_message', (msg) => {
+            if (msg.jid === jid) {
+                addMessageToChat(msg);
+            }
+        });
 
         // Send a message
-        sendButton.addEventListener('click', () => {
-            const message = messageInput.value;
+        sendMessageButton.addEventListener('click', () => {
+            const message = messageInput.value.trim();
             if (!message) return;
 
+            const payload = { jid, message, replyTo };
             fetch('/send-message', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jid, message }),
+                body: JSON.stringify(payload),
             }).then(() => {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message user';
-                messageDiv.innerHTML = `<p>${message}</p>`;
-                chatBox.appendChild(messageDiv);
                 messageInput.value = '';
+                replyTo = null;
             });
         });
+
+        // Send an image
+        sendImageButton.addEventListener('click', () => {
+            imageInput.click();
+        });
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const formData = new FormData();
+                formData.append('imagePath', file);
+                formData.append('jid', jid);
+
+                fetch('/send-image', {
+                    method: 'POST',
+                    body: formData,
+                }).then(() => {
+                    e.target.value = '';
+                });
+            }
+        });
+
+        // Reply to a message
+        chatBox.addEventListener('click', (e) => {
+            if (e.target.classList.contains('reply-btn')) {
+                replyTo = e.target.dataset.id;
+                messageInput.placeholder = 'Replying to a message...';
+            }
+        });
+
+        loadMessages();
     </script>
 </body>
 </html>
