@@ -3,24 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat List</title>
+    <title>Reiker Wa-Web</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Inline spinner styling */
+        #loading {
+            display: none;
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Chat list container */
+        .chat {
+            border-bottom: 1px solid #ddd;
+            padding: 10px;
+        }
+
+        .chat-info h2 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+        .chat-info p {
+            margin: 5px 0 0;
+            font-size: 0.9rem;
+            color: #555;
+        }
+    </style>
 </head>
 <body>
     <header>
-        <h1>WhatsApp Clone</h1>
+        <h1>Reiker Wa-Web</h1>
     </header>
-    <main id="chat-list">
+    <main>
+        <!-- Loading spinner -->
+        <div id="loading">
+            <div class="spinner"></div>
+            <p>Loading messages...</p>
+        </div>
         <!-- Chats will be dynamically loaded here -->
+        <div id="chat-list"></div>
     </main>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="app.js"></script>
     <script>
-        // Load chat list
-        fetch('/api/messages')
-            .then((res) => res.json())
-            .then((chats) => {
-                const chatList = document.getElementById('chat-list');
+        const chatList = document.getElementById('chat-list');
+        const loadingSpinner = document.getElementById('loading');
+        const socket = io(); // Connect to WebSocket
+
+        // Function to show/hide loading spinner
+        function toggleLoading(show) {
+            loadingSpinner.style.display = show ? 'block' : 'none';
+            chatList.style.display = show ? 'none' : 'block';
+        }
+
+        // Function to render chats
+        function renderChatList(chats) {
+            chatList.innerHTML = ''; // Clear the current list
+            if (chats.length === 0) {
+                chatList.innerHTML = '<p>No messages found.</p>';
+            } else {
                 chats.forEach((chat) => {
                     const chatDiv = document.createElement('div');
                     chatDiv.className = 'chat';
@@ -34,7 +93,32 @@
                     `;
                     chatList.appendChild(chatDiv);
                 });
-            });
+            }
+        }
+
+        // Function to fetch and render chat list
+        async function loadChatList() {
+            toggleLoading(true); // Show loading spinner
+            try {
+                const res = await fetch('/api/messages');
+                const chats = await res.json();
+                renderChatList(chats); // Render the chats
+            } catch (err) {
+                console.error('Failed to load chat list:', err);
+                chatList.innerHTML = '<p>Failed to load chats. Try again later.</p>';
+            } finally {
+                toggleLoading(false); // Hide loading spinner
+            }
+        }
+
+        // Initial fetch of chat list
+        loadChatList();
+
+        // Listen for new messages via WebSocket
+        socket.on('new_message', (newMessage) => {
+            // Reload the chat list whenever a new message is received
+            loadChatList();
+        });
     </script>
 </body>
 </html>

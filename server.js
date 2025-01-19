@@ -12,19 +12,20 @@ const io = socketIo(server);
 const PORT = process.env.PORT || 3000;
 
 // Paths
-const SESSION_DIR = "./session";
 const MESSAGES_FILE = "./messages.json";
+const SESSION_DIR = "./session"; // Directory to store session credentials
 
+// Initialize Express
 // Middleware
 app.use(express.static("public"));
 app.use(bodyParser.json());
 
-// Load or initialize messages.json
+// Load or initialize `messages.json`
 if (!fs.existsSync(MESSAGES_FILE)) fs.writeFileSync(MESSAGES_FILE, JSON.stringify([]));
 const loadMessages = () => JSON.parse(fs.readFileSync(MESSAGES_FILE));
 const saveMessages = (messages) => fs.writeFileSync(MESSAGES_FILE, JSON.stringify(messages));
 
-// Initialize Baileys session
+// Initialize Baileys with saved session keys
 const initBaileys = async () => {
     const { version } = await fetchLatestBaileysVersion();
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
@@ -42,19 +43,22 @@ const initBaileys = async () => {
                 const content =
                     msg.message.conversation ||
                     msg.message.imageMessage?.caption ||
+                    msg.message.videoMessage?.caption ||
                     "[Media]";
 
-                allMessages.push({
+                const messageData = {
                     jid: msg.key.remoteJid,
-                    sender: msg.key.fromMe ? "user" : msg.pushName || msg.key.remoteJid,
+                    sender: msg.key.fromMe ? "You" : msg.pushName || msg.key.remoteJid,
                     content,
                     timestamp: msg.messageTimestamp,
-                });
+                };
 
+                // Save to messages.json
+                allMessages.push(messageData);
                 saveMessages(allMessages);
 
-                // Emit message via WebSocket
-                io.emit("new_message", msg);
+                // Emit message to the frontend via WebSocket
+                io.emit("new_message", messageData);
             }
         });
     });
@@ -65,9 +69,14 @@ const initBaileys = async () => {
     return socket;
 };
 
-// Baileys setup
+// Initialize Baileys socket
 let whatsappSocket;
-initBaileys().then((sock) => (whatsappSocket = sock));
+initBaileys()
+    .then((sock) => {
+        whatsappSocket = sock;
+        console.log("Connected to WhatsApp");
+    })
+    .catch((err) => console.error("Failed to initialize Baileys:", err));
 
 // Routes
 app.get("/", (req, res) => {
@@ -78,10 +87,45 @@ app.get("/chat/:jid", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "chat.html"));
 });
 
+app.get("/api/messages", (req, res) => {
+    const allMessages = loadMessages();
+    const chatList = allMessages.reduce((acc, msg) => {
+        const chat = acc.find((c) => c.jid === msg.jid);
+        if (chat) {
+            if (msg.timestamp > chat.timestamp) {
+                chat.lastMessage = msg.content;
+                chat.timestamp = msg.timestamp;
+            }
+        } else {
+            acc.push({
+                jid: msg.jid,
+                sender: msg.sender,
+                lastMessage: msg.content,
+                timestamp: msg.timestamp,
+            });
+        }
+        return acc;
+    }, []);
+    chatList.sort((a, b) => b.timestamp - a.timestamp);
+    res.json(chatList);
+});
+
+app.get('/messages.json', (req, res) => {
+    res.sendFile(path.join(__dirname, "messages.json"));
+});
+
 app.get("/api/messages/:jid", (req, res) => {
     const { jid } = req.params;
-    const messages = loadMessages().filter((msg) => msg.jid === jid);
-    res.json(messages);
+    const chatMessages = loadMessages().filter((msg) => msg.jid === jid);
+    res.json(chatMessages);
+});
+
+// WebSocket Connection
+io.on("connection", (socket) => {
+    console.log("Client connected via WebSocket");
+    socket.on("disconnect", () => {
+        console.log("Client disconnected");
+    });
 });
 
 app.post("/send-message", async (req, res) => {
@@ -148,8 +192,20 @@ app.post("/send-image", async (req, res) => {
 });
 
 // WebSocket connection
-io.on("connection", (socket) => {
-    console.log("Client connected");
+io.on('connection', (socket) => {
+    console.log('User connected');
+
+    // Example event to listen for new messages
+    socket.on('sendMessage', (message) => {
+        saveMessage(message); // Save the message to storage
+
+        // Broadcast to all connected clients
+        io.emit('newMessage', message);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected');
+    });
 });
 
 // Start server
