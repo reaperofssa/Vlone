@@ -37,31 +37,40 @@ const initBaileys = async () => {
 
     // Listen for new messages
     socket.ev.on("messages.upsert", ({ messages }) => {
-        const allMessages = loadMessages();
-        messages.forEach((msg) => {
-            if (msg.message) {
-                const content =
-                    msg.message.conversation ||
-                    msg.message.imageMessage?.caption ||
-                    msg.message.videoMessage?.caption ||
-                    "[Media]";
+    const allMessages = loadMessages();
 
-                const messageData = {
-                    jid: msg.key.remoteJid,
-                    sender: msg.key.fromMe ? "You" : msg.pushName || msg.key.remoteJid,
-                    content,
-                    timestamp: msg.messageTimestamp,
-                };
+    messages.forEach((msg) => {
+        if (msg.message) {
+            const content =
+                msg.message.conversation ||
+                msg.message.imageMessage?.caption ||
+                msg.message.videoMessage?.caption ||
+                "[Media]";
 
-                // Save to messages.json
-                allMessages.push(messageData);
-                saveMessages(allMessages);
+            const isGroupMessage = msg.key.remoteJid.endsWith("@g.us"); // Check if it's a group chat
+            const groupName = isGroupMessage ? msg.key.remoteJid : null; // Use the group JID for now
 
-                // Emit message to the frontend via WebSocket
-                io.emit("new_message", messageData);
-            }
-        });
+            const messageData = {
+                jid: msg.key.remoteJid,
+                sender: msg.key.fromMe
+                    ? "You"
+                    : isGroupMessage
+                    ? `${msg.pushName || msg.key.participant}`
+                    : msg.pushName || msg.key.remoteJid,
+                group: isGroupMessage ? groupName : null, // Store group JID if it's a group
+                content,
+                timestamp: msg.messageTimestamp,
+            };
+
+            // Save to messages.json
+            allMessages.push(messageData);
+            saveMessages(allMessages);
+
+            // Emit message to the frontend via WebSocket
+            io.emit("new_message", messageData);
+        }
     });
+});
 
     // Save credentials on update
     socket.ev.on("creds.update", saveCreds);
