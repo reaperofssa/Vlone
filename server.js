@@ -1,6 +1,6 @@
 const fs = require("fs");
 const express = require("express");
-const { makeWASocket, fetchLatestBaileysVersion, useMultiFileAuthState } = require("@whiskeysockets/baileys");
+const { makeWASocket, fetchLatestBaileysVersion, useMultiFileAuthState, makeInMemoryStore } = require("@whiskeysockets/baileys");
 const http = require("http");
 const socketIo = require("socket.io");
 const bodyParser = require("body-parser");
@@ -10,6 +10,8 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 const PORT = process.env.PORT || 3000;
+
+const store = makeInMemoryStore({});
 
 // Paths
 const MESSAGES_FILE = "./messages.json";
@@ -34,24 +36,26 @@ const initBaileys = async () => {
         auth: state,
         version,
     });
-
+    
+    store.bind(socket.ev);
+    
     // Function to get the name for a chat
     const getChatName = async (jid) => {
-        if (jid.endsWith("@g.us")) {
-            // Fetch group metadata for group chats
-            try {
-                const metadata = await socket.groupMetadata(jid);
-                return metadata.subject || "Unknown Group";
-            } catch (err) {
-                console.error("Error fetching group metadata:", err);
-                return "Unknown Group";
-            }
-        } else {
-            // Use contact name for personal chats
-            const contact = socket.store.contacts[jid];
-            return contact?.name || contact?.notify || jid;
+    if (jid.endsWith("@g.us")) {
+        // Fetch group metadata for group chats
+        try {
+            const metadata = await whatsappSocket.groupMetadata(jid);
+            return metadata.subject || "Unknown Group";
+        } catch (err) {
+            console.error("Error fetching group metadata:", err);
+            return "Unknown Group";
         }
-    };
+    } else {
+        // Use contact name for personal chats
+        const contact = store.contacts[jid]; // Fetch from store
+        return contact?.name || contact?.notify || jid; // Fallback to JID if name is not available
+    }
+};
 
     // Listen for new messages
     socket.ev.on("messages.upsert", async ({ messages }) => {
@@ -113,6 +117,17 @@ const initBaileys = async () => {
 });
 
     // Save credentials on update
+    socket.ev.on("connection.update", (update) => {
+        const { connection, lastDisconnect } = update;
+
+        if (connection === "open") {
+            console.log("WhatsApp connected!");
+        } else if (connection === "close") {
+            console.error("Connection closed:", lastDisconnect?.error);
+        }
+    });
+
+    // Save credentials on update
     socket.ev.on("creds.update", saveCreds);
 
     return socket;
@@ -138,32 +153,41 @@ app.get("/chat/:jid", (req, res) => {
 
 app.get("/api/messages", async (req, res) => {
     const allMessages = loadMessages();
-    const uniqueChats = [];
+    const uniqueChatsMap = new Map(); // To track unique chats with their data
 
     for (const msg of allMessages) {
-        const existingChat = uniqueChats.find((c) => c.jid === msg.jid);
+        // Check if the chat is already processed
+        const existingChat = uniqueChatsMap.get(msg.jid);
         if (existingChat) {
+            // Update the last message if the timestamp is newer
             if (msg.timestamp > existingChat.timestamp) {
                 existingChat.lastMessage = msg.content;
                 existingChat.timestamp = msg.timestamp;
             }
         } else {
             // Fetch chat name dynamically
-            const chatName = await getChatName(msg.jid);
-            uniqueChats.push({
-                jid: msg.jid,
-                chatName,
-                lastMessage: msg.content,
-                timestamp: msg.timestamp,
-            });
+            try {
+                const chatName = await getChatName(msg.jid);
+                uniqueChatsMap.set(msg.jid, {
+                    jid: msg.jid,
+                    chatName,
+                    lastMessage: msg.content,
+                    timestamp: msg.timestamp,
+                });
+            } catch (error) {
+                console.error(`Failed to fetch chat name for ${msg.jid}:`, error);
+            }
         }
     }
 
+    // Convert Map to array and sort by timestamp
+    const uniqueChats = Array.from(uniqueChatsMap.values());
     uniqueChats.sort((a, b) => b.timestamp - a.timestamp);
+
     res.json(uniqueChats);
 });
 
-app.get('/messages.json', (req, res) => {
+app.get("/messages.json", (req, res) => {
     res.sendFile(path.join(__dirname, "messages.json"));
 });
 
