@@ -28,41 +28,45 @@
         let replyTo = null;
 
         function loadMessages() {
-            fetch(`/api/messages/${jid}`)
-                .then(res => res.json())
-                .then(messages => {
-                    chatBox.innerHTML = '';
-                    messages.forEach(addMessageToChat);
-                });
-        }
+    fetch(`/api/messages/${jid}`)
+        .then((res) => res.json())
+        .then((messages) => {
+            chatBox.innerHTML = ''; // Clear chat box
+            messages.forEach(addMessageToChat);
+        })
+        .catch((err) => {
+            console.error("Failed to load messages:", err);
+            chatBox.innerHTML = '<p style="color: red;">Failed to load messages. Try again later.</p>';
+        });
+}
 
-        function addMessageToChat(msg) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = msg.sender === 'You' ? 'message user' : 'message';
-            messageDiv.style = `
-                max-width: 70%;
-                padding: 10px;
-                border-radius: 8px;
-                word-wrap: break-word;
-                position: relative;
-                display: flex;
-                flex-direction: column;
-                background-color: ${msg.sender === 'You' ? '#4caf50' : '#2c2c2c'};
-                color: #ffffff;
-                align-self: ${msg.sender === 'You' ? 'flex-end' : 'flex-start'};
-            `;
-            messageDiv.innerHTML = `
-                <div class="message-header" style="font-size: 0.9rem; font-weight: bold; margin-bottom: 5px;">
-                    <span class="sender">${msg.sender}</span>
-                </div>
-                <div class="message-body">
-                    ${msg.content}
-                    ${replyTo ? `<span class="reply" style="font-size: 0.8rem; color: #aaa; margin-top: 5px; display: block;">Replying to: ${replyTo}</span>` : ''}
-                </div>
-            `;
-            chatBox.appendChild(messageDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
+function addMessageToChat(msg) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = msg.sender === 'You' ? 'message user' : 'message';
+    messageDiv.style = `
+        max-width: 70%;
+        padding: 10px;
+        border-radius: 8px;
+        word-wrap: break-word;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        background-color: ${msg.sender === 'You' ? '#4caf50' : '#2c2c2c'};
+        color: #ffffff;
+        align-self: ${msg.sender === 'You' ? 'flex-end' : 'flex-start'};
+    `;
+    messageDiv.innerHTML = `
+        <div class="message-header" style="font-size: 0.9rem; font-weight: bold; margin-bottom: 5px;">
+            <span class="sender">${msg.sender}</span>
+        </div>
+        <div class="message-body">
+            ${msg.content}
+        </div>
+    `;
+
+    chatBox.appendChild(messageDiv);
+    chatBox.scrollTop = chatBox.scrollHeight; // Auto-scroll to the latest message
+}
 
         const socket = io();
         socket.on('new_message', (msg) => {
