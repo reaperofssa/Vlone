@@ -31,6 +31,15 @@
             chatList.style.display = show ? 'none' : 'block';
         }
 
+        // Function to truncate content to 3 words or fewer
+        function truncateContent(content) {
+            const words = content.split(' ');
+            if (words.length > 3) {
+                return words.slice(0, 3).join(' ') + '...';
+            }
+            return content;
+        }
+
         // Function to clean up private DM numbers (remove @s.whatsapp.net)
         function formatChatName(chatName) {
             return chatName.includes('@s.whatsapp.net')
@@ -63,7 +72,7 @@
                 chatInfo.className = 'chat-info';
                 chatInfo.innerHTML = `
                     <h2>${chatName}</h2>
-                    <p>${latestMessage.content}</p>
+                    <p>${truncateContent(latestMessage.content)}</p>
                 `;
                 chatDiv.appendChild(chatInfo);
 
