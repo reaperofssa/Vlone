@@ -75,26 +75,31 @@
         }
 
         // Function to render chats
-        function renderChatList(chats) {
-            chatList.innerHTML = ''; // Clear the current list
-            if (chats.length === 0) {
-                chatList.innerHTML = '<p>No messages found.</p>';
-            } else {
-                chats.forEach((chat) => {
-                    const chatDiv = document.createElement('div');
-                    chatDiv.className = 'chat';
-                    chatDiv.innerHTML = `
-                        <a href="/chat/${chat.jid}">
-                            <div class="chat-info">
-                                <h2>${chat.sender}</h2>
-                                <p>${chat.lastMessage}</p>
-                            </div>
-                        </a>
-                    `;
-                    chatList.appendChild(chatDiv);
-                });
-            }
-        }
+        function renderGroupedChats(chats) {
+    chatList.innerHTML = ''; // Clear the current list
+    const groupedChats = groupMessagesByChat(chats);
+
+    Object.entries(groupedChats).forEach(([chatName, messages]) => {
+        const chatGroup = document.createElement('div');
+        chatGroup.className = 'chat-group';
+
+        // Chat header
+        const chatHeader = document.createElement('div');
+        chatHeader.className = 'chat-header';
+        chatHeader.innerText = chatName; // Use the chat name
+        chatGroup.appendChild(chatHeader);
+
+        // Messages
+        messages.forEach((msg) => {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${msg.sender === 'You' ? 'user' : ''}`;
+            messageDiv.innerText = msg.content || '[Media]';
+            chatGroup.appendChild(messageDiv);
+        });
+
+        chatList.appendChild(chatGroup);
+    });
+}
 
         // Function to fetch and render chat list
         async function loadChatList() {
