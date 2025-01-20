@@ -8,7 +8,7 @@
 </head>
 <body>
     <header>
-        <a href="/">Back</a>
+        <a href="/">⬅ Back</a>
         <h1>Chat</h1>
     </header>
     <main id="chat-box"></main>
@@ -42,8 +42,13 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = msg.sender === 'You' ? 'message user' : 'message';
             messageDiv.innerHTML = `
-                <p>${msg.content}</p>
-                ${msg.sender !== 'You' ? `<button class="reply-btn" data-id="${msg.timestamp}">↩</button>` : ''}
+                <div class="message-header">
+                    <span class="sender">${msg.sender}</span>
+                </div>
+                <div class="message-body">
+                    ${msg.content}
+                    ${replyTo ? `<span class="reply">Replying to: ${replyTo}</span>` : ''}
+                </div>
             `;
             chatBox.appendChild(messageDiv);
             chatBox.scrollTop = chatBox.scrollHeight;
@@ -96,9 +101,9 @@
 
         // Reply to a message
         chatBox.addEventListener('click', (e) => {
-            if (e.target.classList.contains('reply-btn')) {
-                replyTo = e.target.dataset.id;
-                messageInput.placeholder = 'Replying to a message...';
+            if (e.target.classList.contains('message-body')) {
+                replyTo = e.target.textContent.trim();
+                messageInput.placeholder = `Replying to: ${replyTo}`;
             }
         });
 
