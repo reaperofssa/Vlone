@@ -111,11 +111,11 @@ function addMessageToChat(msg) {
         });
 
         chatBox.addEventListener('click', (e) => {
-            if (e.target.classList.contains('message-body')) {
-                replyTo = e.target.textContent.trim();
-                messageInput.placeholder = `Replying to: ${replyTo}`;
-            }
-        });
+    if (e.target.closest('.message-body')) {
+        replyTo = e.target.closest('.message-body').textContent.trim();
+        messageInput.placeholder = `Replying to: "${replyTo}"`;
+    }
+});
 
         loadMessages();
     </script>
