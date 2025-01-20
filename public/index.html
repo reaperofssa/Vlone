@@ -65,17 +65,28 @@
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const chatList = document.getElementById('chat-list');
-        const loadingSpinner = document.getElementById('loading');
-        const socket = io(); // Connect to WebSocket
+const loadingSpinner = document.getElementById('loading');
+const socket = io(); // Connect to WebSocket
 
-        // Function to show/hide loading spinner
-        function toggleLoading(show) {
-            loadingSpinner.style.display = show ? 'block' : 'none';
-            chatList.style.display = show ? 'none' : 'block';
+// Function to show/hide loading spinner
+function toggleLoading(show) {
+    loadingSpinner.style.display = show ? 'block' : 'none';
+    chatList.style.display = show ? 'none' : 'block';
+}
+
+// Group messages by chat name
+function groupMessagesByChat(messages) {
+    return messages.reduce((grouped, message) => {
+        if (!grouped[message.chatName]) {
+            grouped[message.chatName] = [];
         }
+        grouped[message.chatName].push(message);
+        return grouped;
+    }, {});
+}
 
-        // Function to render chats
-        function renderGroupedChats(chats) {
+// Function to render grouped chats
+function renderGroupedChats(chats) {
     chatList.innerHTML = ''; // Clear the current list
     const groupedChats = groupMessagesByChat(chats);
 
@@ -101,29 +112,32 @@
     });
 }
 
-        // Function to fetch and render chat list
-        async function loadChatList() {
-            toggleLoading(true); // Show loading spinner
-            try {
-                const res = await fetch('/messages.json');
-                const chats = await res.json();
-                renderChatList(chats); // Render the chats
-            } catch (err) {
-                console.error('Failed to load chat list:', err);
-                chatList.innerHTML = '<p>Failed to load chats. Try again later.</p>';
-            } finally {
-                toggleLoading(false); // Hide loading spinner
-            }
+// Function to fetch and render chat list
+async function loadChatList() {
+    toggleLoading(true); // Show loading spinner
+    try {
+        const res = await fetch('/messages.json');
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
         }
+        const chats = await res.json();
+        renderGroupedChats(chats); // Render the chats
+    } catch (err) {
+        console.error('Failed to load chat list:', err);
+        chatList.innerHTML = '<p>Failed to load chats. Try again later.</p>';
+    } finally {
+        toggleLoading(false); // Hide loading spinner
+    }
+}
 
-        // Initial fetch of chat list
-        loadChatList();
+// Initial fetch of chat list
+loadChatList();
 
-        // Listen for new messages via WebSocket
-        socket.on('new_message', (newMessage) => {
-            // Reload the chat list whenever a new message is received
-            loadChatList();
-        });
+// Listen for new messages via WebSocket
+socket.on('new_message', (newMessage) => {
+    // Reload the chat list whenever a new message is received
+    loadChatList();
+});
     </script>
 </body>
 </html>
