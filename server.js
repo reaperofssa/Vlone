@@ -35,33 +35,82 @@ const initBaileys = async () => {
         version,
     });
 
-    // Listen for new messages
-    socket.ev.on("messages.upsert", ({ messages }) => {
-        const allMessages = loadMessages();
-        messages.forEach((msg) => {
-            if (msg.message) {
-                const content =
-                    msg.message.conversation ||
-                    msg.message.imageMessage?.caption ||
-                    msg.message.videoMessage?.caption ||
-                    "[Media]";
-
-                const messageData = {
-                    jid: msg.key.remoteJid,
-                    sender: msg.key.fromMe ? "You" : msg.pushName || msg.key.remoteJid,
-                    content,
-                    timestamp: msg.messageTimestamp,
-                };
-
-                // Save to messages.json
-                allMessages.push(messageData);
-                saveMessages(allMessages);
-
-                // Emit message to the frontend via WebSocket
-                io.emit("new_message", messageData);
+    // Function to get the name for a chat
+    const getChatName = async (jid) => {
+        if (jid.endsWith("@g.us")) {
+            // Fetch group metadata for group chats
+            try {
+                const metadata = await socket.groupMetadata(jid);
+                return metadata.subject || "Unknown Group";
+            } catch (err) {
+                console.error("Error fetching group metadata:", err);
+                return "Unknown Group";
             }
-        });
-    });
+        } else {
+            // Use contact name for personal chats
+            const contact = socket.store.contacts[jid];
+            return contact?.name || contact?.notify || jid;
+        }
+    };
+
+    // Listen for new messages
+    socket.ev.on("messages.upsert", async ({ messages }) => {
+    const allMessages = loadMessages();
+
+    for (const msg of messages) {
+        if (msg.message) {
+            // Extract message content
+            let content = "[Unsupported Message Type]";
+            
+            // Handle different message types
+            if (msg.message.conversation) {
+                content = msg.message.conversation;
+            } else if (msg.message.extendedTextMessage) {
+                content = msg.message.extendedTextMessage.text;
+            } else if (msg.message.imageMessage) {
+                content = msg.message.imageMessage.caption || "[Image]";
+            } else if (msg.message.videoMessage) {
+                content = msg.message.videoMessage.caption || "[Video]";
+            } else if (msg.message.stickerMessage) {
+                content = "[Sticker]";
+            } else if (msg.message.documentMessage) {
+                content = msg.message.documentMessage.fileName || "[Document]";
+            } else if (msg.message.audioMessage) {
+                content = "[Audio]";
+            } else if (msg.message.contactMessage) {
+                content = `[Contact: ${msg.message.contactMessage.displayName || "Unknown"}]`;
+            } else if (msg.message.locationMessage) {
+                const { degreesLatitude, degreesLongitude } = msg.message.locationMessage;
+                content = `[Location: ${degreesLatitude}, ${degreesLongitude}]`;
+            } else if (msg.message.buttonsMessage) {
+                content = msg.message.buttonsMessage.contentText || "[Buttons Message]";
+            } else if (msg.message.listMessage) {
+                content = msg.message.listMessage.description || "[List Message]";
+            } else if (msg.message.pollCreationMessage) {
+                content = msg.message.pollCreationMessage.name || "[Poll]";
+            }
+
+            // Fetch the chat name
+            const chatName = await getChatName(msg.key.remoteJid);
+
+            // Format the message data
+            const messageData = {
+                jid: msg.key.remoteJid,
+                sender: msg.key.fromMe ? "You" : msg.pushName || msg.key.remoteJid,
+                chatName,
+                content,
+                timestamp: msg.messageTimestamp,
+            };
+
+            // Save to messages.json
+            allMessages.push(messageData);
+            saveMessages(allMessages);
+
+            // Emit the message to the frontend via WebSocket
+            io.emit("new_message", messageData);
+        }
+    }
+});
 
     // Save credentials on update
     socket.ev.on("creds.update", saveCreds);
@@ -87,27 +136,31 @@ app.get("/chat/:jid", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "chat.html"));
 });
 
-app.get("/api/messages", (req, res) => {
+app.get("/api/messages", async (req, res) => {
     const allMessages = loadMessages();
-    const chatList = allMessages.reduce((acc, msg) => {
-        const chat = acc.find((c) => c.jid === msg.jid);
-        if (chat) {
-            if (msg.timestamp > chat.timestamp) {
-                chat.lastMessage = msg.content;
-                chat.timestamp = msg.timestamp;
+    const uniqueChats = [];
+
+    for (const msg of allMessages) {
+        const existingChat = uniqueChats.find((c) => c.jid === msg.jid);
+        if (existingChat) {
+            if (msg.timestamp > existingChat.timestamp) {
+                existingChat.lastMessage = msg.content;
+                existingChat.timestamp = msg.timestamp;
             }
         } else {
-            acc.push({
+            // Fetch chat name dynamically
+            const chatName = await getChatName(msg.jid);
+            uniqueChats.push({
                 jid: msg.jid,
-                sender: msg.sender,
+                chatName,
                 lastMessage: msg.content,
                 timestamp: msg.timestamp,
             });
         }
-        return acc;
-    }, []);
-    chatList.sort((a, b) => b.timestamp - a.timestamp);
-    res.json(chatList);
+    }
+
+    uniqueChats.sort((a, b) => b.timestamp - a.timestamp);
+    res.json(uniqueChats);
 });
 
 app.get('/messages.json', (req, res) => {
