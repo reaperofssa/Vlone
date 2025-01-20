@@ -105,7 +105,7 @@
         async function loadChatList() {
             toggleLoading(true); // Show loading spinner
             try {
-                const res = await fetch('/api/messages');
+                const res = await fetch('/messages.json');
                 const chats = await res.json();
                 renderChatList(chats); // Render the chats
             } catch (err) {
