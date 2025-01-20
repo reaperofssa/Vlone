@@ -31,10 +31,18 @@
             chatList.style.display = show ? 'none' : 'block';
         }
 
+        // Function to clean up private DM numbers (remove @s.whatsapp.net)
+        function formatChatName(chatName) {
+            return chatName.includes('@s.whatsapp.net')
+                ? chatName.replace('@s.whatsapp.net', '')
+                : chatName;
+        }
+
         // Group messages by chat name and keep only the latest message
         function groupMessagesByChat(messages) {
             const grouped = {};
             messages.forEach(message => {
+                message.chatName = formatChatName(message.chatName); // Clean chat name
                 grouped[message.chatName] = message; // Overwrite to keep the latest message
             });
             return grouped;
@@ -68,6 +76,22 @@
             });
         }
 
+        // Function to merge/update chats and render them
+        function updateChatList(chats, newMessage) {
+            const groupedChats = groupMessagesByChat(chats);
+
+            // Update or add the new message
+            const chatName = formatChatName(newMessage.chatName);
+            groupedChats[chatName] = newMessage;
+
+            // Sort by timestamp (latest first)
+            const sortedChats = Object.values(groupedChats).sort(
+                (a, b) => b.timestamp - a.timestamp
+            );
+
+            renderGroupedChats(sortedChats); // Render sorted chats
+        }
+
         // Function to fetch and render chat list
         async function loadChatList() {
             toggleLoading(true); // Show loading spinner
@@ -98,9 +122,8 @@
                 content: chat.querySelector('p').innerText,
             }));
 
-            // Merge the new message
-            const updatedChats = [...currentChats, newMessage];
-            renderGroupedChats(updatedChats);
+            // Merge the new message and render
+            updateChatList(currentChats, newMessage);
         });
     </script>
 </body>
